@@ -13,7 +13,7 @@ object Main extends App with Logging {
   val conf = ConfigFactory.load()
   val httpPort = conf.get[Int]("http.port")
 
-  val routes = Routes.index ~ Routes.auth
+  val routes = Routes.index ~ Routes.auth ~ Routes.queue
   val startedServer = StartedServer("0.0.0.0", httpPort, routes)
 
 

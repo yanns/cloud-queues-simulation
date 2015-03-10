@@ -1,5 +1,8 @@
 package io.sphere.cloudqueues
 
+import akka.http.model.StatusCodes._
+import akka.http.model.headers.Location
+import akka.http.model.HttpResponse
 import akka.http.server.Directives._
 import akka.http.server.Route
 import akka.http.marshallers.sprayjson.SprayJsonSupport._
@@ -24,6 +27,13 @@ object Routes {
           Map("token" →
             Map("id" → "simulated-token", "expires" → "2212-04-13T22:51:02.000-06:00")))
         complete(ast)
+      }
+    }
+
+  def queue(implicit ec: ExecutionContext): Route =
+    path("v1" / "queues" / Segment) { name ⇒
+      put {
+        complete(HttpResponse(status = Created).withHeaders(Location(s"/v1/queues/$name")))
       }
     }
 
