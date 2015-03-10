@@ -1,8 +1,9 @@
 package io.sphere.cloudqueues
 
 import akka.actor.ActorSystem
-import com.typesafe.config.ConfigFactory
+import akka.http.server.Directives._
 import com.github.kxbmap.configs._
+import com.typesafe.config.ConfigFactory
 
 object Main extends App with Logging {
 
@@ -12,7 +13,7 @@ object Main extends App with Logging {
   val conf = ConfigFactory.load()
   val httpPort = conf.get[Int]("http.port")
 
-  val routes = Routes.index
+  val routes = Routes.index ~ Routes.auth
   val startedServer = StartedServer("0.0.0.0", httpPort, routes)
 
 

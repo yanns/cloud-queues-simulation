@@ -4,8 +4,11 @@ version := "1.0"
 
 scalaVersion := "2.11.6"
 
+val akkaHttpVersion = "1.0-M4"
+
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http-experimental" % "1.0-M4",
+  "com.typesafe.akka" %% "akka-http-experimental" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-spray-json-experimental" % akkaHttpVersion,
   "com.typesafe" % "config" % "1.2.1",
   "com.github.kxbmap" %% "configs" % "0.2.3",
   "ch.qos.logback" % "logback-classic" % "1.0.13"
