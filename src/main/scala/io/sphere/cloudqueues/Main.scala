@@ -2,6 +2,7 @@ package io.sphere.cloudqueues
 
 import akka.actor.ActorSystem
 import akka.http.server.Directives._
+import akka.stream.ActorFlowMaterializer
 import com.github.kxbmap.configs._
 import com.typesafe.config.ConfigFactory
 
@@ -9,6 +10,7 @@ object Main extends App with Logging {
 
   implicit val system = ActorSystem()
   import system.dispatcher
+  implicit val materializer = ActorFlowMaterializer()
 
   val conf = ConfigFactory.load()
   val httpPort = conf.get[Int]("http.port")

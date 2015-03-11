@@ -10,9 +10,8 @@ import scala.concurrent.Future
 
 object StartedServer extends Logging {
 
-  def apply(host: String, port: Int, routes: Route)(implicit system: ActorSystem): StartedServer = {
+  def apply(host: String, port: Int, routes: Route)(implicit system: ActorSystem, materializer: ActorFlowMaterializer): StartedServer = {
     import system.dispatcher
-    implicit val materializer = ActorFlowMaterializer()
 
     log.info(s"starting HTTP server on $host:$port")
 
