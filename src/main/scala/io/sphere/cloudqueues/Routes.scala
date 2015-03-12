@@ -1,12 +1,14 @@
 package io.sphere.cloudqueues
 
 import akka.http.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.model.HttpResponse
+import akka.http.model.ContentTypes._
 import akka.http.model.StatusCodes._
 import akka.http.model.headers.Location
+import akka.http.model.{HttpEntity, HttpResponse}
 import akka.http.server.Directives._
 import akka.http.server.Route
 import akka.stream.ActorFlowMaterializer
+import io.sphere.cloudqueues.QueueInterface._
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 
@@ -40,28 +42,73 @@ object Routes {
     implicit val format = jsonFormat2(ClaimRequestBody.apply)
   }
 
-  def queue(implicit ec: ExecutionContext, materializer: ActorFlowMaterializer): Route = {
-    pathPrefix("v1" / "queues") {
-      path(Segment) { name ⇒
-        put {
-          complete(HttpResponse(status = Created).withHeaders(Location(s"/v1/queues/$name")))
-        }
-      } ~
-      path(Segment / "claims") { name ⇒
-        parameter('limit.as[Int] ?) { limit ⇒
-          post {
-            entity(as[ClaimRequestBody]) { claim ⇒
+  case class Queue(queueInterface: QueueInterface)(implicit ec: ExecutionContext, materializer: ActorFlowMaterializer) {
 
-              val ast = JsArray(JsObject(
-                "body" → JsObject("event" -> JsString(s"$name $limit")),
-                "age" → JsNumber(239),
-                "href" → JsString(s"/v1/queues/$name/messages/51db6f78c508f17ddc924357?claim_id=51db7067821e727dc24df754"),
-                "ttl" → JsNumber(claim.ttl)))
-              complete(Created → ast)
+    implicit val messageJson = jsonFormat2(Message.apply)
+
+    val newQueue = put {
+      path(Segment) { name ⇒
+        onSuccess(queueInterface.newQueue(QueueName(name))) { resp ⇒
+          val status = resp match {
+            case QueueAlreadyExists ⇒ NoContent
+            case QueueCreated ⇒ Created
+          }
+          complete(HttpResponse(status = status).withHeaders(Location(s"/v1/queues/$name")))
+        }
+      }
+    }
+
+    val postMessages = post {
+      path(Segment / "messages") { name ⇒
+        entity(as[List[Message]]) { messages =>
+          onSuccess(queueInterface.addMessages(QueueName(name), messages)) {
+            case None ⇒ complete(HttpResponse(status = NotFound))
+            case Some(MessagesAdded(msg)) ⇒
+              val response = JsObject(
+                "partial" → JsBoolean(false),
+                "resources" → JsArray(msg.map(m ⇒ JsString(s"/v1/queues/$name/messages/${m.id}")): _*)
+              )
+              complete(Created → response)
+          }
+        }
+      }
+    }
+
+    val claimMessages = post {
+      path(Segment / "claims") { name ⇒
+        parameter('limit.as[Int] ?) { maybeLimit ⇒
+          val limit = maybeLimit getOrElse 10
+          entity(as[ClaimRequestBody]) { claim ⇒
+            onSuccess(queueInterface.claimMessages(QueueName(name), claim.ttl, limit)) {
+              case None ⇒ complete(HttpResponse(status = NotFound))
+              case Some(NoMessagesToClain) ⇒ complete(HttpResponse(status = NoContent))
+              case Some(ClaimCreated(Claim(id, msgs))) ⇒
+                val ast = JsArray(msgs.map(m ⇒ JsObject(
+                  "body" → m.json,
+                  "age" → JsNumber(239),
+                  "href" → JsString(s"/v1/queues/$name/messages/${m.id}?claim_id=$id"),
+                  "ttl" → JsNumber(claim.ttl))): _*)
+                complete(Created → ast)
             }
           }
         }
       }
     }
+
+    val deleteMessages = delete {
+      path(Segment / "messages" / Segment) { (name, msgId) ⇒
+        parameter('claim_id.as[String] ?) { claimId ⇒
+          // TODO (YaSi): parse claimId directly with type ClaimId
+          onSuccess(queueInterface.deleteMessages(QueueName(name), MessageId(msgId), claimId.map(ClaimId.apply))) { _ ⇒
+            complete(HttpResponse(status = NoContent, entity = HttpEntity.empty(`application/json`)))
+          }
+        }
+      }
+    }
+
+    val route: Route = pathPrefix("v1" / "queues") {
+      newQueue ~ postMessages ~ claimMessages ~ deleteMessages
+    }
   }
+
 }
